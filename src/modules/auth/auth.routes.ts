@@ -1,0 +1,11 @@
+import { Router } from "express";
+import { login, me, logout } from "./auth.controller";
+import { validate } from "../../middleware/validate";
+import { loginSchema } from "./auth.validation";
+import { loginLimiter } from "../../middleware/rateLimit";
+import { authenticate } from "../../middleware/auth";
+const r = Router();
+r.post("/login", loginLimiter, validate(loginSchema), login);
+r.get("/me", authenticate, me);
+r.post("/logout", authenticate, logout);
+export default r;

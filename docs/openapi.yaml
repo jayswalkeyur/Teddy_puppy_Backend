@@ -1,0 +1,195 @@
+openapi: 3.0.3
+info:
+  title: TeddyPups API
+  version: 1.0.0
+  description: REST API for puppy listings, enquiries, contact messages and admin operations.
+servers:
+  - url: http://localhost:5000/api/v1
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Error:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        message: { type: string }
+        errorCode: { type: string }
+        requestId: { type: string }
+    EnquiryInput:
+      type: object
+      required: [name, phone, puppyId]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 80 }
+        phone: { type: string, maxLength: 25, example: '+971 50 123 4567' }
+        email: { type: string, format: email }
+        area: { type: string, maxLength: 80 }
+        puppyId: { type: string, format: uuid, description: Frontend public UUID, not Mongo ObjectId }
+        message: { type: string, maxLength: 2000 }
+        website: { type: string, description: Honeypot; must be empty }
+paths:
+  /health:
+    get:
+      summary: Health and database status
+      responses:
+        '200': { description: Health status }
+  /auth/login:
+    post:
+      summary: Admin login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, minLength: 1, maxLength: 128 }
+      responses:
+        '200': { description: Access token issued }
+        '401': { description: Invalid credentials }
+  /auth/me:
+    get:
+      security: [{ bearerAuth: [] }]
+      summary: Current admin identity
+      responses:
+        '200': { description: Current user }
+        '401': { description: Unauthorized }
+  /auth/logout:
+    post:
+      security: [{ bearerAuth: [] }]
+      summary: Client token disposal acknowledgement
+      responses:
+        '200': { description: Logout acknowledged }
+  /puppies:
+    get:
+      summary: Published puppy listing
+      parameters:
+        - { in: query, name: page, schema: { type: integer, minimum: 1, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 50, default: 12 } }
+        - { in: query, name: q, schema: { type: string, maxLength: 100 } }
+        - { in: query, name: breed, schema: { type: string } }
+        - { in: query, name: gender, schema: { type: string, enum: [male, female, mixed, unknown] } }
+        - { in: query, name: status, schema: { type: string, enum: [available, reserved, sold, unavailable] } }
+        - { in: query, name: sort, schema: { type: string, enum: [createdAt, name, breed, publishedAt] } }
+        - { in: query, name: order, schema: { type: string, enum: [asc, desc] } }
+      responses:
+        '200': { description: Paginated puppy records }
+  /puppies/featured:
+    get:
+      summary: Featured published puppies
+      responses:
+        '200': { description: Featured puppies }
+  /puppies/search:
+    get:
+      summary: Search published puppies
+      responses:
+        '200': { description: Paginated search results }
+  /puppies/{slug}:
+    get:
+      summary: Public puppy profile by slug
+      parameters:
+        - { in: path, name: slug, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Puppy profile }
+        '404': { description: Puppy not found }
+  /enquiries:
+    post:
+      summary: Submit puppy enquiry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EnquiryInput' }
+      responses:
+        '201': { description: Enquiry accepted }
+        '400': { description: Validation error }
+        '404': { description: Puppy not found }
+        '429': { description: Rate limited }
+  /contact:
+    post:
+      summary: Submit contact letter
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/EnquiryInput'
+                - type: object
+                  properties:
+                    puppyId: { type: string, format: uuid, nullable: true, description: Optional; empty string allowed for any puppy }
+      responses:
+        '201': { description: Contact message accepted }
+  /admin/puppies:
+    get:
+      security: [{ bearerAuth: [] }]
+      summary: Admin puppy list
+      responses:
+        '200': { description: Paginated records }
+    post:
+      security: [{ bearerAuth: [] }]
+      summary: Create puppy
+      responses:
+        '201': { description: Puppy created }
+  /admin/puppies/{id}:
+    get:
+      security: [{ bearerAuth: [] }]
+      summary: Get admin puppy
+      parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Puppy }
+    patch:
+      security: [{ bearerAuth: [] }]
+      summary: Update puppy
+      parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Updated puppy }
+    delete:
+      security: [{ bearerAuth: [] }]
+      summary: Soft archive puppy
+      parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Archived }
+  /admin/enquiries:
+    get:
+      security: [{ bearerAuth: [] }]
+      summary: List enquiries
+      responses:
+        '200': { description: Paginated enquiries }
+  /admin/enquiries/{id}:
+    get:
+      security: [{ bearerAuth: [] }]
+      summary: Get enquiry
+      parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Enquiry }
+    patch:
+      security: [{ bearerAuth: [] }]
+      summary: Update enquiry status
+      parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Updated }
+  /admin/contact-messages:
+    get:
+      security: [{ bearerAuth: [] }]
+      summary: List contact messages
+      responses:
+        '200': { description: Paginated messages }
+  /admin/contact-messages/{id}:
+    get:
+      security: [{ bearerAuth: [] }]
+      summary: Get contact message
+      parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Contact message }
+    patch:
+      security: [{ bearerAuth: [] }]
+      summary: Update contact status
+      parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Updated }
